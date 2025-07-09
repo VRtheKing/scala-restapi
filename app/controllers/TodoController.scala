@@ -2,67 +2,61 @@ package controllers
 
 import javax.inject._
 import play.api.mvc._
-import scala.collection.mutable
 import play.api.libs.json._
-
-import models.TodoModel
-import models.TodoCreate
-
+import models._
+import models.TodosTable._
+import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
-class TodoController @Inject()(cc:ControllerComponents) extends AbstractController(cc){
-  val ItemList: mutable.Map[Int, TodoModel] = mutable.Map()
-
-  def getItems = Action {
-    Ok(Json.toJson(ItemList.values.toSeq))
-  }
-
-  def getItem(id: Int) = Action {
-    ItemList.get(id) match {
-      case Some(item) => Ok(Json.toJson(item))
-      case None => NotFound(s"Item with $id not found")
+class TodoController @Inject()(cc: ControllerComponents, todoRepo: TodoRepository)(implicit ec: ExecutionContext) extends AbstractController(cc) {
+  def getItems = Action.async {
+    todoRepo.getAll.map { todos =>
+      Ok(Json.toJson(todos))
     }
   }
 
-  def createItem = Action(parse.json) { request =>
-    request.body.validate[TodoCreate].fold(
-      errors => BadRequest(Json.obj("message" -> "invalid JSON", "errors" -> errors.toString())),
-      todoCreate => {
-        val id = if (ItemList.isEmpty) 1 else ItemList.keys.max + 1
-        val newTodo = TodoModel(id, todoCreate.description, todoCreate.isDone)
-        ItemList.put(id, newTodo)
-        Created(Json.obj("message" -> "Item Created", "id" -> id))
-      }
-    )
+  def getItem(id: Int) = Action.async {
+    todoRepo.getById(id).map {
+      case Some(todo) => Ok(Json.toJson(todo))
+      case None => NotFound(Json.obj("message" -> s"The Item with id $id not found"))
+    }
   }
 
-
-  def editItem(id: Int) = Action(parse.json) { request =>
+  def createItem = Action.async(parse.json) { request =>
     request.body.validate[TodoCreate].fold(
-      errors => {
-        println(Json)
-        BadRequest(Json.obj("message" -> "Invalid JSON", "errors" -> errors.toString()))
-      },
-      updateTodo => {
-        if (ItemList.contains(id)){
-          val changed = TodoModel(id, updateTodo.description, updateTodo.isDone)
-          ItemList.put(id, changed)
-          Ok(Json.obj("message"->"Changes are Successfull"))
-        } else {
-          NotFound(Json.obj("message"->"Object is not found"))
+      errors => Future.successful(BadRequest(Json.obj("message" -> "Invalid JSON", "errors" -> JsError.toJson(errors)))),
+      todoCreate => {
+        val newTodo = TodoModel(0, todoCreate.description, todoCreate.isDone)
+        todoRepo.create(newTodo).map { id =>
+          Created(Json.obj("message" -> s"Object created successfully with id $id"))
         }
       }
     )
   }
 
-  def deleteItem(id: Int) = Action {
-    if (ItemList.contains(id)) {
-      ItemList.remove((id))
-      Ok(s"Deleted item with id: $id")
-    } else {
-      NotFound("Item not found")
-    }
+  def editItem(id: Int) = Action.async(parse.json) { request =>
+    request.body.validate[TodoCreate].fold(
+      errors => Future.successful(BadRequest(Json.obj("message" -> "Invalid json", "errors" -> JsError.toJson(errors)))),
+      todoUpdate => {
+        val updateTodo = TodoModel(id, todoUpdate.description, todoUpdate.isDone)
+        todoRepo.update(id, updateTodo).map {rowsAffected =>
+          if(rowsAffected > 0) {
+            Ok(Json.obj("message" -> "Json Updated"))
+          } else {
+           NotFound(Json.obj("message" -> s"Record with id $id not found"))
+          }
+        }
+      }
+    )
   }
 
-
+  def deleteItem(id: Int) = Action.async { request =>
+    todoRepo.delete(id).map { rowsAffected =>
+      if (rowsAffected>0) {
+        Ok(Json.obj("message"->s"Record with id $id is deleted"))
+      } else {
+        NotFound(Json.obj("message" -> s"The record with id $id not found"))
+      }
+    }
+  }
 }
