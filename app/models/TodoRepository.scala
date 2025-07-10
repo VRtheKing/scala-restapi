@@ -1,17 +1,22 @@
 package models
 
+//import slick.jdbc.PostgresProfile.api._
+//import slick.jdbc.PostgresProfile
+//import slick.dbio.DBIO
+//import slick.basic.DatabaseConfig
+
 import javax.inject._
-import slick.jdbc.PostgresProfile.api._
-import slick.jdbc.PostgresProfile
-import slick.dbio.DBIO
-import slick.basic.DatabaseConfig
 import play.api.db.slick.{DatabaseConfigProvider, HasDatabaseConfigProvider}
 
 import scala.concurrent.{ExecutionContext, Future}
 
-@Singleton
+import slick.jdbc.MySQLProfile
+import slick.jdbc.MySQLProfile.api._
+import play.api.db.slick.{DatabaseConfigProvider, HasDatabaseConfigProvider}
+
 class TodoRepository @Inject()(protected val dbConfigProvider: DatabaseConfigProvider)(implicit ec: ExecutionContext)
-  extends HasDatabaseConfigProvider[PostgresProfile] {
+  extends HasDatabaseConfigProvider[MySQLProfile] {
+
 
   val todos = TableQuery[TodoTable]
 
